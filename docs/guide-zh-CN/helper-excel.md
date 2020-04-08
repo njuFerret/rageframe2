@@ -50,7 +50,7 @@ $list = [
 // 简单使用
 return ExcelHelper::exportData($list, $header);
 
-// 定制 默认导出xlsx 支持 : xlsx/xls/Html/CSV
+// 定制 默认导出xlsx 支持 : xlsx/xls/html/csv
 return ExcelHelper::exportData($list, $header, '测试', 'xlsx');
 ```
 
@@ -64,5 +64,5 @@ return ExcelHelper::exportData($list, $header, '测试', 'xlsx');
  * @param int $startRow 开始行数 默认 1
  * @return array|bool|mixed
  */
-$data = ExcelHelper::getExcelData($filePath, $startRow);
+$data = ExcelHelper::import($filePath, $startRow);
 ```

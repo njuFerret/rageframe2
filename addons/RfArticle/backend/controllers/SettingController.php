@@ -1,39 +1,48 @@
 <?php
+
 namespace addons\RfArticle\backend\controllers;
 
-use addons\RfArticle\common\models\Article;
-use addons\RfArticle\common\models\ArticleTag;
-use common\controllers\AddonsBaseController;
-use common\enums\StatusEnum;
+use Yii;
+use common\helpers\ArrayHelper;
+use common\interfaces\AddonsSetting;
+use addons\RfArticle\common\models\SettingForm;
 
 /**
+ * 参数设置
+ *
  * Class SettingController
  * @package addons\RfArticle\backend\controllers
  */
-class SettingController extends AddonsBaseController
+class SettingController extends BaseController implements AddonsSetting
 {
     /**
-     * @param $params
+     * @return mixed|string
      */
-    public function actionHook($params)
+    public function actionDisplay()
     {
-        $tags = ArticleTag::find()
-            ->where(['status' => StatusEnum::ENABLED])
-            ->asArray()
-            ->all();
+        $request = Yii::$app->request;
+        $model = new SettingForm();
+        $model->attributes = $this->getConfig();
+        if ($model->load($request->post()) && $model->validate()) {
+            $this->setConfig(ArrayHelper::toArray($model));
+            return $this->message('修改成功', $this->redirect(['display']));
+        }
 
-        $articles = Article::find()
-            ->where(['status' => StatusEnum::ENABLED])
-            ->andWhere(Article::position($params['position']))
-            ->orderBy('view desc')
-            ->with(['tags'])
-            ->limit(10)
-            ->asArray()
-            ->all();
+        return $this->render('display',[
+            'model' => $model,
+        ]);
+    }
 
+    /**
+     * 钩子
+     *
+     * @param array $param
+     * @return mixed|string
+     */
+    public function actionHook($param = [])
+    {
         return $this->render('hook', [
-            'tags' => $tags,
-            'articles' => $articles,
+            'param' => $param
         ]);
     }
 }

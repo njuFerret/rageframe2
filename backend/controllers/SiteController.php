@@ -1,17 +1,18 @@
 <?php
+
 namespace backend\controllers;
 
 use Yii;
 use yii\web\Controller;
-use yii\filters\AccessControl;
 use yii\filters\VerbFilter;
-use backend\models\LoginForm;
+use yii\filters\AccessControl;
+use common\behaviors\ActionLogBehavior;
+use backend\forms\LoginForm;
 
 /**
- * 站点控制器
- *
  * Class SiteController
  * @package backend\controllers
+ * @author jianyan74 <751393839@qq.com>
  */
 class SiteController extends Controller
 {
@@ -20,12 +21,42 @@ class SiteController extends Controller
      *
      * @var string
      */
-    public $layout  = "login";
+    public $layout = "default";
 
     /**
-     * 独立动作
-     *
-     * @return array
+     * {@inheritdoc}
+     */
+    public function behaviors()
+    {
+        return [
+            'access' => [
+                'class' => AccessControl::class,
+                'rules' => [
+                    [
+                        'actions' => ['login', 'error', 'captcha'],
+                        'allow' => true,
+                    ],
+                    [
+                        'actions' => ['logout'],
+                        'allow' => true,
+                        'roles' => ['@'],
+                    ],
+                ],
+            ],
+            'actionLog' => [
+                'class' => ActionLogBehavior::class
+            ],
+            'verbs' => [
+                'class' => VerbFilter::class,
+                'actions' => [
+                    'logout' => ['post'],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * {@inheritdoc}
      */
     public function actions()
     {
@@ -33,7 +64,6 @@ class SiteController extends Controller
             'error' => [
                 'class' => 'yii\web\ErrorAction',
             ],
-            // 验证码
             'captcha' => [
                 'class' => 'yii\captcha\CaptchaAction',
                 'fixedVerifyCode' => YII_ENV_TEST ? 'testme' : null,
@@ -44,39 +74,8 @@ class SiteController extends Controller
                 'width' => 100, // 宽度
                 'offset' => 4, // 设置字符偏移量
                 'backColor' => 0xffffff, // 背景颜色
-                'foreColor' => 0x1ab394, // 字体颜色
+                'foreColor' => 0x62a8ea, // 字体颜色
             ]
-        ];
-    }
-
-    /**
-     * 行为控制
-     *
-     * @return array
-     */
-    public function behaviors()
-    {
-        return [
-            'access' => [
-                'class' => AccessControl::className(),
-                'rules' => [
-                    [
-                        'actions' => ['login', 'error','captcha'],
-                        'allow' => true,
-                        'roles' => ['?'],// 游客
-                    ],
-                    [
-                        'allow' => true,
-                        'roles' => ['@'],// 登录
-                    ],
-                ],
-            ],
-            'verbs' => [
-                'class' => VerbFilter::className(),
-                'actions' => [
-                    'logout' => ['post'],
-                ],
-            ],
         ];
     }
 
@@ -88,37 +87,35 @@ class SiteController extends Controller
      */
     public function actionLogin()
     {
-        if (!Yii::$app->user->isGuest)
-        {
-            // 记录日志
-            Yii::$app->debris->log('login', '自动登录');
+        if (!Yii::$app->user->isGuest) {
+            // 记录行为日志
+            Yii::$app->services->actionLog->create('login', '自动登录', false);
+
             return $this->goHome();
         }
 
         $model = new LoginForm();
         $model->loginCaptchaRequired();
-        if ($model->load(Yii::$app->request->post()) && $model->login())
-        {
-            // 记录日志
-            Yii::$app->debris->log('login', '账号密码登录', false);
-            return $this->goHome();
-        }
+        if ($model->load(Yii::$app->request->post()) && $model->login()) {
+            // 记录行为日志
+            Yii::$app->services->actionLog->create('login', '账号登录', false);
 
-        return $this->render('login', [
-            'model' => $model,
-        ]);
+            return $this->goHome();
+        } else {
+            $model->password = '';
+
+            return $this->render('login', [
+                'model' => $model,
+            ]);
+        }
     }
 
     /**
-     * 退出登陆
-     *
      * @return \yii\web\Response
      * @throws \yii\base\InvalidConfigException
      */
     public function actionLogout()
     {
-        // 记录日志
-        Yii::$app->debris->log('logout', '退出登录');
         Yii::$app->user->logout();
 
         return $this->goHome();

@@ -1,22 +1,27 @@
 <?php
+
 namespace backend\modules\member;
 
+use Yii;
+
 /**
- * Class Module
- * @package backend\modules\member
+ * member module definition class
  */
 class Module extends \yii\base\Module
 {
     /**
-     * @var string
+     * {@inheritdoc}
      */
     public $controllerNamespace = 'backend\modules\member\controllers';
 
     /**
-     * @inheritdoc
+     * {@inheritdoc}
      */
     public function init()
     {
         parent::init();
+
+        // Yii::$app->services->merchant->addId(0);
+        // custom initialization code goes here
     }
 }

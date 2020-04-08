@@ -1,4 +1,5 @@
 <?php
+
 namespace common\components\payment;
 
 use Yii;
@@ -14,6 +15,8 @@ class UnionPay
 {
     protected $config;
 
+    const DEFAULT = 'UnionPay_Express';
+
     /**
      * UnionPay constructor.
      */
@@ -25,16 +28,17 @@ class UnionPay
     /**
      * 实例化类
      *
-     * @param $type
-     * @return mixed
+     * @param string $type
+     * @return \Omnipay\UnionPay\ExpressGateway
      */
-    private function create($type = 'UnionPay_Express')
+    private function create($type = self::DEFAULT)
     {
+        /* @var $gateway \Omnipay\UnionPay\ExpressGateway */
         $gateway = Omnipay::create($type);
         $gateway->setMerId($this->config['mch_id']);
         $gateway->setCertId($this->config['cert_id']);
-        $gateway->setPublicKey($this->config['public_key']); // path or content
-        $gateway->setPrivateKey($this->config['private_key']); // path or content
+        $gateway->setPublicKey(Yii::getAlias($this->config['public_key'])); // path or content
+        $gateway->setPrivateKey(Yii::getAlias($this->config['private_key'])); // path or content
         $gateway->setReturnUrl($this->config['return_url']);
         $gateway->setNotifyUrl($this->config['notify_url']);
 
@@ -56,6 +60,7 @@ class UnionPay
 
     /**
      * APP
+     *
      * @param $order
      * @param bool $debug
      * @return mixed
@@ -63,6 +68,7 @@ class UnionPay
     public function app($order, $debug = false)
     {
         $gateway = $this->create();
+        /* @var $response \Omnipay\UnionPay\Message\CreateOrderResponse */
         $response = $gateway->createOrder($order)->send();
 
         return $debug ? $response->getData() : $response->getTradeNo();
@@ -70,6 +76,7 @@ class UnionPay
 
     /**
      * PC/Wap
+     *
      * @param $order
      * @param bool $debug
      * @return mixed
@@ -77,6 +84,7 @@ class UnionPay
     public function html($order, $debug = false)
     {
         $gateway = $this->create();
+        /* @var $response \Omnipay\UnionPay\Message\LegacyQuickPayPurchaseResponse */
         $response = $gateway->purchase($order)->send();
 
         return $debug ? $response->getData() : $response->getRedirectHtml();
@@ -96,7 +104,7 @@ class UnionPay
         $response = $gateway->query([
             'orderId' => $orderId, //Your site trade no, not union tn.
             'txnTime' => $txnTime, //Order trade time
-            'txnAmt'  => $txnAmt, //Order total fee
+            'txnAmt' => $txnAmt, //Order total fee
         ])->send();
 
         return $response->getData();

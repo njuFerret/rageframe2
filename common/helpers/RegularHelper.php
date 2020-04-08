@@ -1,4 +1,5 @@
 <?php
+
 namespace common\helpers;
 
 /**
@@ -6,6 +7,7 @@ namespace common\helpers;
  *
  * Class RegularHelper
  * @package common\helpers
+ * @author jianyan74 <751393839@qq.com>
  */
 class RegularHelper
 {
@@ -18,7 +20,7 @@ class RegularHelper
      */
     public static function verify($type, $value)
     {
-        return preg_match(self::$type() , $value);
+        return preg_match(self::$type(), $value);
     }
 
     /**
@@ -38,7 +40,7 @@ class RegularHelper
      */
     public static function email()
     {
-        return '';
+        return '/^[a-zA-Z0-9!#$%&\'*+\\/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&\'*+\\/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/';
     }
 
     /**
@@ -59,7 +61,8 @@ class RegularHelper
      */
     public static function identityCard()
     {
-        return '/^\d{15}|\d{}18$/';
+        // return '/^\d{15}|\d{}18$/';
+        return '/^(^[1-9]\d{7}((0\d)|(1[0-2]))(([0|1|2]\d)|3[0-1])\d{3}$)|(^[1-9]\d{5}[1-9]\d{3}((0\d)|(1[0-2]))(([0|1|2]\d)|3[0-1])((\d{4})|\d{3}[Xx])$)$/';
     }
 
     /**
@@ -80,6 +83,6 @@ class RegularHelper
      */
     public static function url()
     {
-        return '';
+        return '/(http:\/\/)|(https:\/\/)/i';
     }
 }

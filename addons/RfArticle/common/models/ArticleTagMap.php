@@ -1,4 +1,5 @@
 <?php
+
 namespace addons\RfArticle\common\models;
 
 use Yii;
@@ -42,6 +43,15 @@ class ArticleTagMap extends \yii\db\ActiveRecord
 
     /**
      * @param $article_id
+     * @return ArticleTagMap[]
+     */
+    public static function getTagsByActicleId($article_id)
+    {
+        return self::findAll(['article_id' => $article_id]);
+    }
+
+    /**
+     * @param $article_id
      * @param $tags
      * @return bool
      * @throws \yii\db\Exception
@@ -50,12 +60,10 @@ class ArticleTagMap extends \yii\db\ActiveRecord
     {
         // 删除原有标签关联
         self::deleteAll(['article_id' => $article_id]);
-
-        if ($article_id && !empty($tags))
-        {
+        if ($article_id && !empty($tags)) {
             $data = [];
-            foreach ($tags as $v)
-            {
+
+            foreach ($tags as $v) {
                 $data[] = [$v, $article_id];
             }
 

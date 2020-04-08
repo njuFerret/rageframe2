@@ -1,4 +1,5 @@
 <?php
+
 namespace common\widgets\ueditor;
 
 use Yii;
@@ -6,15 +7,17 @@ use yii\helpers\Html;
 use yii\helpers\Url;
 use yii\helpers\Json;
 use yii\helpers\ArrayHelper;
+use yii\widgets\InputWidget;
 use common\widgets\ueditor\assets\AppAsset;
 
 /**
  * 百度编辑器上传
  *
  * Class UEditor
- * @package common\widgets\webuploader
+ * @package common\widgets\ueditor
+ * @author jianyan74 <751393839@qq.com>
  */
-class UEditor extends \yii\widgets\InputWidget
+class UEditor extends InputWidget
 {
     /**
      * ueditor参数配置
@@ -22,18 +25,6 @@ class UEditor extends \yii\widgets\InputWidget
      * @var array
      */
     public $config = [];
-
-    /**
-     * 默认名称
-     *
-     * @var string
-     */
-    public $name;
-
-    /**
-     * @var string|array
-     */
-    public $value;
 
     /**
      * @var array
@@ -65,25 +56,28 @@ class UEditor extends \yii\widgets\InputWidget
                     'customstyle', 'paragraph', 'fontfamily', 'fontsize'
                 ],
                 [
-                    'bold', 'italic', 'underline', 'fontborder', 'strikethrough', 'superscript', 'subscript', 'removeformat',
-                    'formatmatch', 'autotypeset', 'blockquote', 'pasteplain', '|',
+                    'bold', 'italic', 'underline', 'fontborder', 'strikethrough', 'superscript', 'subscript',
+                    'removeformat', 'formatmatch', 'autotypeset', 'blockquote', 'pasteplain', '|',
                     'forecolor', 'backcolor', 'insertorderedlist', 'insertunorderedlist', '|',
                     'rowspacingtop', 'rowspacingbottom', 'lineheight', '|',
                     'directionalityltr', 'directionalityrtl', 'indent', '|'
                 ],
                 [
                     'justifyleft', 'justifycenter', 'justifyright', 'justifyjustify', '|',
-                    'link', 'unlink', '|','simpleupload',
-                    'insertimage', 'emotion', 'scrawl', 'insertvideo', 'music', 'attachment', 'map', 'insertcode', 'pagebreak', '|',
+                    'link', 'unlink', '|',
+                    'simpleupload', 'insertimage', 'emotion', 'scrawl', 'insertvideo', 'music', 'attachment', 'map', 'insertcode', 'pagebreak', '|',
                     'horizontal', 'inserttable', '|',
                     'print', 'preview', 'searchreplace', 'help'
                 ]
             ],
         ];
 
+        if (!empty($this->config['toolbars'])) {
+            unset($config['toolbars']);
+        }
         $this->config = ArrayHelper::merge($config, $this->config);
         $this->formData = ArrayHelper::merge([
-            'takeOverAction' => 'local',
+            'drive' => Yii::$app->params['UEditorUploadDrive'],
         ], $this->formData);
     }
 
@@ -97,18 +91,17 @@ class UEditor extends \yii\widgets\InputWidget
 
         //  由于百度上传不能传递数组，所以转码成为json
         !isset($this->formData) && $this->formData = [];
-        foreach ($this->formData as $key => &$formDatum)
-        {
-            if (!empty($formDatum) && is_array($formDatum))
-            {
-                $formDatum = json_encode($formDatum);
+        foreach ($this->formData as $key => &$formDatum) {
+            if (!empty($formDatum) && is_array($formDatum)) {
+                $formDatum = Json::encode($formDatum);
             }
         }
 
         $formData = Json::encode($this->formData);
-        
-        //ready部分代码，是为了缩略图管理。UEditor本身就很大，在后台直接加载大文件图片会很卡。
-        $script = <<<UEDITOR
+
+        // ready部分代码，是为了缩略图管理。UEditor本身就很大，在后台直接加载大文件图片会很卡。
+        $script = <<<JS
+        UE.delEditor('{$id}');
         var ue = UE.getEditor('{$id}',{$config}).ready(function(){
             this.addListener( "beforeInsertImage", function ( type, imgObjs ) {
                 for(var i=0;i < imgObjs.length;i++){
@@ -116,19 +109,31 @@ class UEditor extends \yii\widgets\InputWidget
                 }
             });
             
-        this.execCommand('serverparam', function(editor) {
-                    return {$formData};
-                });
+            this.execCommand('serverparam', function(editor) {
+                return {$formData};
+            });
         });
-UEDITOR;
+        
+        $('.UEditorTemplate').click(function () {
+            var content = $(this).data('content');
+            content = content.toString();
+            
+            if (content.length === 0) {
+                return;
+            }
+            
+            UE.getEditor('{$id}').focus();
+            UE.getEditor('{$id}').execCommand('inserthtml', content);
+        });
+JS;
 
         $this->getView()->registerJs($script);
 
-        if ($this->hasModel())
-        {
-            return Html::activeTextarea($this->model, $this->attribute);
+        if ($this->hasModel()) {
+            return Html::activeTextarea($this->model, $this->attribute, ['id' => $id]);
         }
 
-        return Html::textarea(ArrayHelper::getValue($this->config, 'textarea', $this->name), $this->value, ['id' => $id]);
+        return Html::textarea(ArrayHelper::getValue($this->config, 'textarea', $this->name), $this->value,
+            ['id' => $id]);
     }
 }

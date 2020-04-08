@@ -1,8 +1,10 @@
 <?php
+
 namespace common\models\common;
 
 use Yii;
 use yii\filters\RateLimitInterface;
+use common\models\base\User;
 
 /**
  * 速率控制
@@ -13,6 +15,11 @@ use yii\filters\RateLimitInterface;
 class RateLimit extends User implements RateLimitInterface
 {
     /**
+     * @var int
+     */
+    public $rateWindowSize = 3600;
+
+    /**
      * 速度控制
      *
      * @param \yii\web\Request $request
@@ -21,7 +28,8 @@ class RateLimit extends User implements RateLimitInterface
      */
     public function getRateLimit($request, $action)
     {
-        return Yii::$app->params['user.rateLimit'];
+        // 次数、秒 例如 3600秒可访问5000次
+        return [5000, $this->rateWindowSize];
     }
 
     /**
@@ -33,7 +41,14 @@ class RateLimit extends User implements RateLimitInterface
      */
     public function loadAllowance($request, $action)
     {
-        return [$this->allowance, $this->allowance_updated_at];
+        $allowance = Yii::$app->cache->get($this->getCacheKey('api_rate_allowance'));
+        $timestamp = Yii::$app->cache->get($this->getCacheKey('api_rate_timestamp'));
+
+        if ($allowance === false) {
+            return [$this->rateWindowSize, time()];
+        }
+
+        return [$allowance, $timestamp];
     }
 
     /**
@@ -44,8 +59,16 @@ class RateLimit extends User implements RateLimitInterface
      */
     public function saveAllowance($request, $action, $allowance, $timestamp)
     {
-        $this->allowance = $allowance;
-        $this->allowance_updated_at = $timestamp;
-        $this->save();
+        Yii::$app->cache->set($this->getCacheKey('api_rate_allowance'), $allowance, $this->rateWindowSize);
+        Yii::$app->cache->set($this->getCacheKey('api_rate_timestamp'), $timestamp, $this->rateWindowSize);
+    }
+
+    /**
+     * @param $key
+     * @return array
+     */
+    public function getCacheKey($key)
+    {
+        return [__CLASS__, $this->getId(), $key];
     }
 }

@@ -1,18 +1,25 @@
 <?php
 namespace common\widgets\ueditor;
 
+use common\helpers\ResultHelper;
 use Yii;
+use yii\helpers\Url;
 use yii\web\Controller;
 use yii\filters\AccessControl;
 use common\helpers\ArrayHelper;
 use common\helpers\UploadHelper;
-use common\helpers\StringHelper;
+use common\enums\StatusEnum;
+use yii\helpers\Json;
+use addons\Wechat\common\models\Attachment as WechatAttachment;
+use League\Flysystem\Adapter\Local;
+use League\Flysystem\Filesystem;
 
 /**
- * 百度编辑器控制器
+ * 百度编辑器
  *
  * Class UeditorController
- * @package backend\controllers
+ * @package common\widgets\ueditor
+ * @author jianyan74 <751393839@qq.com>
  */
 class UeditorController extends Controller
 {
@@ -27,13 +34,12 @@ class UeditorController extends Controller
     public $config = [];
 
     /**
-     * 列出文件/图片时需要忽略的文件夹
-     * 主要用于处理缩略图管理，兼容比如elFinder之类的程序
-     * @var array
+     * 显示驱动
+     *
+     * 有Attachment、WechatAttachment、Local
+     * @var string
      */
-    public $ignoreDir = [
-        '.thumbnails'
-    ];
+    public $showDrive = 'Attachment';
 
     /**
      * @var array
@@ -51,13 +57,33 @@ class UeditorController extends Controller
     ];
 
     /**
+     * @var int
+     */
+    protected $fileStart;
+
+    /**
+     * @var int
+     */
+    protected $fileEnd;
+
+    /**
+     * @var int
+     */
+    protected $fileNum = 0;
+
+    /**
+     * @var \League\Flysystem\Adapter\Local
+     */
+    protected $filesystem;
+
+    /**
      * 行为控制
      */
     public function behaviors()
     {
         return [
             'access' => [
-                'class' => AccessControl::className(),
+                'class' => AccessControl::class,
                 'rules' => [
                     [
                         'allow' => true,
@@ -91,10 +117,15 @@ class UeditorController extends Controller
 
         $configPath = Yii::getAlias('@common') . "/widgets/ueditor/";
         // 保留UE默认的配置引入方式
-        if (file_exists($configPath . 'config.json'))
-        {
-            $config = json_decode(preg_replace("/\/\*[\s\S]+?\*\//", '', file_get_contents($configPath . 'config.json')), true);
+        if (file_exists($configPath . 'config.json')) {
+            $config = Json::decode(preg_replace("/\/\*[\s\S]+?\*\//", '', file_get_contents($configPath . 'config.json')));
             $this->config = ArrayHelper::merge($config, $this->config);
+        }
+
+        // 设置显示驱动
+        $showDrive = Yii::$app->request->get('showDrive');
+        if (!empty($showDrive) && in_array($showDrive, ['Attachment', 'WechatAttachment', 'Local'])) {
+            $this->showDrive = $showDrive;
         }
     }
 
@@ -105,12 +136,11 @@ class UeditorController extends Controller
      */
     public function actionIndex()
     {
-        Yii::$app->response->format = yii\web\Response::FORMAT_JSON;
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
 
         $action = strtolower(Yii::$app->request->get('action', 'config'));
         $actions = $this->actions;
-        if (isset($actions[$action]))
-        {
+        if (isset($actions[$action])) {
             return $this->run($actions[$action]);
         }
 
@@ -132,18 +162,14 @@ class UeditorController extends Controller
      */
     public function actionImage()
     {
-        try
-        {
+        try {
             $upload = new UploadHelper(Yii::$app->request->get(), 'images');
-            $upload->uploadFileName = 'file';
-            $upload->verify();
-            // 上传
-            $url = $upload->save();
+            $upload->verifyFile();
+            $upload->save();
 
-            return $this->result('SUCCESS', $url);
-        }
-        catch (\Exception $e)
-        {
+            $baseInfo = $upload->getBaseInfo();
+            return $this->result('SUCCESS', $baseInfo['url']);
+        } catch (\Exception $e) {
             return $this->result($e->getMessage());
         }
     }
@@ -155,24 +181,18 @@ class UeditorController extends Controller
      */
     public function actionScrawl()
     {
-        try
-        {
+        try {
             // 保存扩展名称
             $extend = Yii::$app->request->post('extend', 'jpg');
             $data = Yii::$app->request->post('image');
 
             $upload = new UploadHelper(Yii::$app->request->post(), 'images');
-            $upload->uploadFileName = 'file';
-            $upload->verify([
-                'extension' => $extend,
-                'size' => strlen($data),
-            ]);
+            $upload->verifyBase64($data, $extend);
+            $upload->save(base64_decode($data));
 
-            $url = $upload->save('base64');
-            return $this->result('SUCCESS', $url);
-        }
-        catch (\Exception $e)
-        {
+            $baseInfo = $upload->getBaseInfo();
+            return $this->result('SUCCESS', $baseInfo['url']);
+        } catch (\Exception $e) {
             return $this->result($e->getMessage());
         }
     }
@@ -184,18 +204,27 @@ class UeditorController extends Controller
      */
     public function actionVideo()
     {
-        try
-        {
+        try {
             $upload = new UploadHelper(Yii::$app->request->get(), 'videos');
-            $upload->uploadFileName = 'file';
-            $upload->verify();
-            // 上传
-            $url = $upload->save();
+            $upload->verifyFile();
+            $upload->save();
 
-            return $this->result('SUCCESS', $url);
-        }
-        catch (\Exception $e)
-        {
+            $baseInfo = $upload->getBaseInfo();
+            $url = $baseInfo['url'];
+            if (isset($upload->config['poster']) && $upload->config['poster'] == true) {
+                $upload->getVideoPoster();
+                $baseInfo = $upload->getBaseInfo();
+                $posterUrl = $baseInfo['url'];
+            } else {
+                $posterUrl = '';
+            }
+
+            return [
+                'state' => 'SUCCESS',
+                'url' => $url,
+                'posterUrl' => $posterUrl,
+            ];
+        } catch (\Exception $e) {
             return $this->result($e->getMessage());
         }
     }
@@ -205,18 +234,14 @@ class UeditorController extends Controller
      */
     public function actionFile()
     {
-        try
-        {
+        try {
             $upload = new UploadHelper(Yii::$app->request->get(), 'files');
-            $upload->uploadFileName = 'file';
-            $upload->verify();
-            // 上传
-            $url = $upload->save();
+            $upload->verifyFile();
+            $upload->save();
 
-            return $this->result('SUCCESS', $url);
-        }
-        catch (\Exception $e)
-        {
+            $baseInfo = $upload->getBaseInfo();
+            return $this->result('SUCCESS', $baseInfo['url']);
+        } catch (\Exception $e) {
             return $this->result($e->getMessage());
         }
     }
@@ -225,32 +250,29 @@ class UeditorController extends Controller
      * 获取远程图片
      *
      * @return array
-     * @throws \yii\web\NotFoundHttpException
+     * @throws \Exception
      */
     public function actionCatchImage()
     {
         /* 上传配置 */
         $source = Yii::$app->request->post('source', []);
-
         $upload = new UploadHelper(Yii::$app->request->get(), 'images');
-        $upload->uploadFileName = 'file';
-
-        foreach ($source as $imgUrl)
-        {
-            try
-            {
-                $upload->verifyRemote($imgUrl);
-                // 上传
-                $url = $upload->save('remote');
+        foreach ($source as $imgUrl) {
+            try {
+                $upload->save($upload->verifyUrl($imgUrl));
+                if ($file = Yii::$app->services->attachment->findByMd5($upload->config['md5'])) {
+                    $url = $file['base_url'];
+                } else {
+                    $baseInfo = $upload->getBaseInfo();
+                    $url = $baseInfo['url'];
+                }
 
                 $list[] = [
                     'state' => 'SUCCESS',
                     'url' => $url,
                     'source' => $imgUrl
                 ];
-            }
-            catch (\Exception $e)
-            {
+            } catch (\Exception $e) {
                 $list[] = [
                     'state' => $e->getMessage(),
                     'url' => '',
@@ -274,8 +296,8 @@ class UeditorController extends Controller
     public function actionListFile()
     {
         $prefix = Yii::$app->params['uploadConfig']['files']['fullPath'] == true ? Yii::$app->request->hostInfo : '';
-        return $this->manage(
-            $this->config['fileManagerAllowFiles'],
+        $action = 'get' . $this->showDrive;
+        return $this->$action(
             $this->config['fileManagerListSize'],
             $this->config['fileManagerListPath'],
             $prefix
@@ -290,12 +312,70 @@ class UeditorController extends Controller
     public function actionListImage()
     {
         $prefix = Yii::$app->params['uploadConfig']['images']['fullPath'] == true ? Yii::$app->request->hostInfo : '';
-        return $this->manage(
-            $this->config['imageManagerAllowFiles'],
+        $action = 'get' . $this->showDrive;
+        return $this->$action(
             $this->config['imageManagerListSize'],
             $this->config['imageManagerListPath'],
             $prefix
         );
+    }
+
+    /**
+     * 获取微信资源
+     *
+     * @param $size
+     * @param $path
+     * @return array
+     */
+    public function getWechatAttachment($size, $path)
+    {
+        $start = Yii::$app->request->get('start');
+
+        $data = WechatAttachment::find()
+            ->where(['status' => StatusEnum::ENABLED])
+            ->andWhere(['media_type' => 'image'])
+            ->orderBy('id desc');
+        $countModel = clone $data;
+        $models = $data->offset($start)
+            ->limit($size)
+            ->asArray()
+            ->all();
+
+        $files = [];
+        foreach ($models as $model) {
+            $files[] = [
+                'url' => urldecode(Url::to(['addons/rf-wechat/analysis/image', 'attach' => $model['media_url']])),
+                'mtime' => $model['created_at']
+            ];
+        }
+
+        return [
+            'state' => 'SUCCESS',
+            'list' => $files,
+            'start' => $start,
+            'total' => $countModel->count(),
+        ];
+    }
+
+    /**
+     * 获取数据库资源文件列表
+     *
+     * @param $size
+     * @param $path
+     * @return array
+     */
+    public function getAttachment($size, $path)
+    {
+        $start = Yii::$app->request->get('start');
+        $upload_type = $path == $this->config['imageManagerListPath'] ? 'images' : 'files';
+        list($files, $total) = Yii::$app->services->attachment->getBaiduListPage($upload_type, $start, $size);
+
+        return [
+            'state' => 'SUCCESS',
+            'list' => $files,
+            'start' => $start,
+            'total' => $total,
+        ];
     }
 
     /**
@@ -306,98 +386,55 @@ class UeditorController extends Controller
      * @param $path
      * @return array
      */
-    protected function manage($allowFiles, $listSize, $path, $prefix)
+    protected function getLocal($listSize, $path, $prefix)
     {
-        $allowFiles = substr(str_replace('.', '|', join('', $allowFiles)), 1);
         /* 获取参数 */
-        $size = isset($_GET['size']) ? $_GET['size'] : $listSize;
-        $start = isset($_GET['start']) ? $_GET['start'] : 0;
-        $end = $start + $size;
+        $size = Yii::$app->request->get('size', $listSize);
+        $this->fileStart = Yii::$app->request->get('start', 0);
+        $this->fileEnd = $this->fileStart + $size;
 
-        /* 获取文件列表 */
-        $path = Yii::getAlias('@attachment') . (substr($path, 0, 1) == '/' ? '' : '/') . $path;
-
-        $files = [];
-        $files = $this->getFiles($path, $allowFiles, $files,$prefix);
-        if (!count($files))
-        {
-            return  [
-                'state' => 'no match file',
-                'list' => [],
-                'start' => $start,
-                'total' => count($files),
-            ];
-        }
-
-        /* 获取指定范围的列表 */
-        $len = count($files);
-        for ($i = min($end, $len) - 1, $list = []; $i < $len && $i >= 0 && $i >= $start; $i--)
-        {
-            $list[] = $files[$i];
-        }
-
-        /* 返回数据 */
-        return [
+        $files = $this->getLocalFiles($path, $prefix);
+        return  [
             'state' => 'SUCCESS',
-            'list' => $list,
-            'start' => $start,
-            'total' => count($files),
+            'list' => $files,
+            'start' => $this->fileStart,
+            'total' => $this->fileNum,
         ];
     }
 
     /**
-     * 遍历获取目录下的指定类型的文件
-     *
-     * @param $path
-     * @param $allowFiles
-     * @param array $files
-     * @return array|null
+     * @param string $path 文件路径
+     * @param string $allowFiles 文件后缀
+     * @param array $files 文件列表
+     * @param string $prefix 前缀
+     * @return array
      */
-    protected function getFiles($path, $allowFiles, &$files = [], $prefix)
+    public function getLocalFiles($path, $prefix, &$files = [])
     {
-        if (!is_dir($path) || in_array(basename($path), $this->ignoreDir))
-        {
-            return null;
+        if (!$this->filesystem) {
+            $adapter = new Local(Yii::getAlias('@attachment'));
+            $this->filesystem = new Filesystem($adapter);
         }
 
-        if (substr($path, strlen($path) - 1) != '/')
+        $listFiles = $this->filesystem->listContents($path);
+        foreach ($listFiles as $key => $listFile)
         {
-            $path .= '/';
-        }
-
-        $handle = opendir($path);
-        while (false !== ($file = readdir($handle)))
-        {
-            if ($file != '.' && $file != '..')
-            {
-                $childPath = $path . $file;
-                if (is_dir($childPath))
-                {
-                    $this->getFiles($childPath, $allowFiles, $files, $prefix);
-                }
-                else
-                {
-                    // 正则匹配文件后缀待优化
-                    $pat = "/\.(" . $allowFiles . ")$/i";
-                    if ($this->action->id == 'list-image')
-                    {
-                        $pat = "/\.thumbnail\.(" . $allowFiles . ")$/i";
-                    }
-
-                    $url = Yii::getAlias('@attachurl') . substr($childPath, strlen(Yii::getAlias('@attachment')));
-                    $url = StringHelper::iconvForWindows($url, "utf-8");
-
+            if ($listFile['type'] == 'dir') {
+                $this->getLocalFiles($listFile['path'], $prefix, $files);
+            } else {
+                // 获取选中列表
+                if ($this->fileNum >= $this->fileStart && $this->fileNum < $this->fileEnd) {
+                    $url = $prefix . Yii::getAlias('@attachurl') . '/' . $listFile['path'];
                     $files[] = [
-                        'url' => $prefix . $url,
-                        'mtime' => filemtime($childPath)
+                        'url' => $url,
+                        'mtime' => $listFile['timestamp']
                     ];
-
-//                    if (preg_match($pat, $file))
-//                    {
-//
-//                    }
                 }
+
+                $this->fileNum++;
             }
+
+            unset($listFiles[$key]);
         }
 
         return $files;

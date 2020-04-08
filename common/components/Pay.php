@@ -1,4 +1,5 @@
 <?php
+
 namespace common\components;
 
 use Yii;
@@ -7,11 +8,16 @@ use common\components\payment\AliPay;
 use common\components\payment\UnionPay;
 use common\components\payment\WechatPay;
 use common\helpers\ArrayHelper;
-use common\helpers\UrlHelper;
 
 /**
+ * 支付组件
+ *
  * Class Pay
  * @package common\components
+ * @property \common\components\payment\WechatPay $wechat
+ * @property \common\components\payment\AliPay $alipay
+ * @property \common\components\payment\UnionPay $union
+ * @author jianyan74 <751393839@qq.com>
  */
 class Pay extends Component
 {
@@ -24,7 +30,9 @@ class Pay extends Component
 
     public function init()
     {
-        $this->rfConfig = Yii::$app->debris->configAll();
+        // 默认读后台配置可切换为根据商户来获取配置
+        $this->rfConfig = Yii::$app->debris->backendConfigAll();
+        // $this->rfConfig = Yii::$app->debris->merchantConfigAll();
 
         parent::init();
     }
@@ -40,11 +48,12 @@ class Pay extends Component
     {
         return new AliPay(ArrayHelper::merge([
             'app_id' => $this->rfConfig['alipay_appid'],
-            'notify_url' => UrlHelper::toFront(['notify/ali']),
+            'notify_url' => '',
             'return_url' => '',
             'ali_public_key' => $this->rfConfig['alipay_cert_path'],
             // 加密方式： ** RSA2 **
             'private_key' => $this->rfConfig['alipay_key_path'],
+            'sandbox' => false
         ], $config));
     }
 
@@ -76,7 +85,7 @@ class Pay extends Component
     {
         return new UnionPay(ArrayHelper::merge([
             'mch_id' => $this->rfConfig['union_mchid'],
-            'notify_url' => UrlHelper::toFront(['notify/union']),
+            'notify_url' => '',
             'return_url' => '',
             'cert_id' => $this->rfConfig['union_cert_id'],
             'private_key' => $this->rfConfig['union_private_key'],
@@ -90,18 +99,12 @@ class Pay extends Component
      */
     public function __get($name)
     {
-        try
-        {
+        try {
             return parent::__get($name);
-        }
-        catch (\Exception $e)
-        {
-            if($this->$name())
-            {
+        } catch (\Exception $e) {
+            if ($this->$name()) {
                 return $this->$name([]);
-            }
-            else
-            {
+            } else {
                 throw $e->getPrevious();
             }
         }

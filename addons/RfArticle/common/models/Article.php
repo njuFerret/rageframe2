@@ -3,6 +3,8 @@
 namespace addons\RfArticle\common\models;
 
 use Yii;
+use common\behaviors\MerchantBehavior;
+use common\helpers\StringHelper;
 
 /**
  * This is the model class for table "{{%addon_article}}".
@@ -24,8 +26,12 @@ use Yii;
  * @property string $created_at 创建时间
  * @property string $updated_at 更新时间
  */
-class Article extends \common\models\common\BaseModel
+class Article extends \common\models\base\BaseModel
 {
+    use MerchantBehavior;
+
+    public $tags = [];
+
     /**
      * 推荐位(位运算)
      *
@@ -51,10 +57,10 @@ class Article extends \common\models\common\BaseModel
     public function rules()
     {
         return [
-            [['title'], 'required'],
-            [['cate_id', 'view', 'sort', 'status', 'created_at', 'updated_at'], 'integer'],
+            [['title', 'cover', 'sort'], 'required'],
+            [['merchant_id', 'cate_id', 'view', 'sort', 'status', 'updated_at'], 'integer'],
             [['content'], 'string'],
-            [['position'], 'safe'],
+            [['position', 'created_at', 'tags'], 'safe'],
             [['title', 'seo_key'], 'string', 'max' => 50],
             [['cover', 'link'], 'string', 'max' => 100],
             [['seo_content'], 'string', 'max' => 1000],
@@ -74,6 +80,7 @@ class Article extends \common\models\common\BaseModel
             'cover' => '封面',
             'seo_key' => 'Seo Key',
             'seo_content' => 'Seo Content',
+            'tags' => '标签',
             'cate_id' => '分类',
             'description' => '简介',
             'position' => '推荐位',
@@ -98,8 +105,9 @@ class Article extends \common\models\common\BaseModel
     {
         return self::find()
             ->where(['<', 'id', $id])
+            ->andWhere(['merchant_id' => Yii::$app->services->merchant->getId()])
             ->select(['id', 'title'])
-            ->orderBy('id asc')
+            ->orderBy('id desc')
             ->one();
     }
 
@@ -113,6 +121,7 @@ class Article extends \common\models\common\BaseModel
     {
         return self::find()
             ->where(['>', 'id', $id])
+            ->andWhere(['merchant_id' => Yii::$app->services->merchant->getId()])
             ->select(['id', 'title'])
             ->orderBy('id asc')
             ->one();
@@ -150,19 +159,13 @@ class Article extends \common\models\common\BaseModel
     protected function getPosition()
     {
         $position = $this->position;
-
         $pos = 0;
-        if (!is_array($position))
-        {
-            if ($position > 0)
-            {
+        if (!is_array($position)) {
+            if ($position > 0) {
                 return $position;
             }
-        }
-        else
-        {
-            foreach ($position as $key => $value)
-            {
+        } else {
+            foreach ($position as $key => $value) {
                 // 将各个推荐位的值相加
                 $pos += $value;
             }
@@ -178,17 +181,16 @@ class Article extends \common\models\common\BaseModel
      */
     public function getCate()
     {
-        return $this->hasOne(ArticleCate::className(),['id' => 'cate_id']);
+        return $this->hasOne(ArticleCate::class, ['id' => 'cate_id']);
     }
 
     /**
-     * 中间表关联标签
-     *
      * @return \yii\db\ActiveQuery
+     * @throws \yii\base\InvalidConfigException
      */
     public function getTags()
     {
-        return $this->hasMany(ArticleTag::className(), ['id' => 'tag_id'])
+        return $this->hasMany(ArticleTag::class, ['id' => 'tag_id'])
             ->viaTable(ArticleTagMap::tableName(), ['article_id' => 'id'])
             ->asArray();
     }
@@ -201,6 +203,7 @@ class Article extends \common\models\common\BaseModel
     {
         // 推荐位
         $this->position = $this->getPosition();
+        $this->created_at = StringHelper::dateToInt($this->created_at);
 
         return parent::beforeSave($insert);
     }

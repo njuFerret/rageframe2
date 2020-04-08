@@ -1,13 +1,15 @@
 <?php
+
 namespace common\helpers;
 
 use Yii;
-use Ramsey\Uuid\Uuid;
 use yii\helpers\BaseStringHelper;
+use Ramsey\Uuid\Uuid;
 
 /**
  * Class StringHelper
  * @package common\helpers
+ * @author jianyan74 <751393839@qq.com>
  */
 class StringHelper extends BaseStringHelper
 {
@@ -21,8 +23,7 @@ class StringHelper extends BaseStringHelper
      */
     public static function uuid($type = 'time', $name = 'php.net')
     {
-        switch ($type)
-        {
+        switch ($type) {
             // 生成版本1（基于时间的）UUID对象
             case  'time' :
                 $uuid = Uuid::uuid1();
@@ -61,14 +62,31 @@ class StringHelper extends BaseStringHelper
      */
     public static function dateToInt($value)
     {
-        if (empty($value))
-        {
+        if (empty($value)) {
             return $value;
         }
 
-        if (!is_numeric($value))
-        {
+        if (!is_numeric($value)) {
             return strtotime($value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * 时间戳转日期
+     *
+     * @param $value
+     * @return false|int
+     */
+    public static function intToDate($value, $format = 'Y-m-d H:i:s')
+    {
+        if (empty($value)) {
+            return date($format);
+        }
+
+        if (is_numeric($value)) {
+            return date($format, $value);
         }
 
         return $value;
@@ -128,13 +146,18 @@ class StringHelper extends BaseStringHelper
      */
     public static function getLocalFilePath($url, $type = 'images')
     {
-        $prefix =  Yii::getAlias("@root/") . 'web';
-        if (Yii::$app->params['uploadConfig'][$type]['fullPath'] == true)
-        {
-            $url = str_replace(Yii::$app->request->hostInfo, '', $url);
+        if (RegularHelper::verify('url', $url)) {
+            if (!RegularHelper::verify('url', Yii::getAlias("@attachurl"))) {
+                $hostInfo = Yii::$app->request->hostInfo . Yii::getAlias("@attachurl");
+                $url = str_replace($hostInfo, '', $url);
+            } else {
+                $url = str_replace(Yii::getAlias("@attachurl"), '', $url);
+            }
+        } else {
+            $url = str_replace(Yii::getAlias("@attachurl"), '', $url);
         }
 
-        return $prefix . $url;
+        return Yii::getAlias("@attachment") . $url;
     }
 
     /**
@@ -148,17 +171,13 @@ class StringHelper extends BaseStringHelper
     public static function parseAttr($string)
     {
         $array = preg_split('/[,;\r\n]+/', trim($string, ",;\r\n"));
-        if (strpos($string,':'))
-        {
+        if (strpos($string, ':')) {
             $value = [];
-            foreach ($array as $val)
-            {
+            foreach ($array as $val) {
                 list($k, $v) = explode(':', $val);
                 $value[$k] = $v;
             }
-        }
-        else
-        {
+        } else {
             $value = $array;
         }
 
@@ -188,11 +207,15 @@ class StringHelper extends BaseStringHelper
      * @param bool $is_prefix
      * @return bool|\SimpleXMLElement
      */
-    public static function simplexmlLoadString($string, $class_name = 'SimpleXMLElement', $options = 0, $ns = '', $is_prefix = false)
-    {
+    public static function simplexmlLoadString(
+        $string,
+        $class_name = 'SimpleXMLElement',
+        $options = 0,
+        $ns = '',
+        $is_prefix = false
+    ) {
         libxml_disable_entity_loader(true);
-        if (preg_match('/(\<\!DOCTYPE|\<\!ENTITY)/i', $string))
-        {
+        if (preg_match('/(\<\!DOCTYPE|\<\!ENTITY)/i', $string)) {
             return false;
         }
 
@@ -232,23 +255,19 @@ class StringHelper extends BaseStringHelper
     public static function toUnderScore($str)
     {
         $array = [];
-        for ($i = 0; $i < strlen($str); $i++)
-        {
-            if ($str[$i] == strtolower($str[$i]))
-            {
+        for ($i = 0; $i < strlen($str); $i++) {
+            if ($str[$i] == strtolower($str[$i])) {
                 $array[] = $str[$i];
-            }
-            else
-            {
-                if ($i > 0)
-                {
+            } else {
+                if ($i > 0) {
                     $array[] = '-';
                 }
+
                 $array[] = strtolower($str[$i]);
             }
         }
 
-        return implode('',$array);
+        return implode('', $array);
     }
 
     /**
@@ -277,16 +296,15 @@ class StringHelper extends BaseStringHelper
         $seed = $numeric ? (str_replace('0', '', $seed) . '012340567890') : ($seed . 'zZ' . strtoupper($seed));
 
         $hash = '';
-        if (!$numeric)
-        {
+        if (!$numeric) {
             $hash = chr(rand(1, 26) + rand(0, 1) * 32 + 64);
             $length--;
         }
 
         $max = strlen($seed) - 1;
-        for ($i = 0; $i < $length; $i++)
-        {
-            $hash .= $seed{mt_rand(0, $max)};
+        $seed = str_split($seed);
+        for ($i = 0; $i < $length; $i++) {
+            $hash .= $seed[mt_rand(0, $max)];
         }
 
         return $hash;
@@ -301,31 +319,36 @@ class StringHelper extends BaseStringHelper
      */
     public static function randomNum($prefix = false, $length = 8)
     {
-        $str = $prefix ? $prefix : '';
-        return $str . substr(implode(NULL, array_map('ord', str_split(substr(uniqid(), 7, 13), 1))), 0, $length);
+        $str = $prefix ?? '';
+        return $str . substr(implode(null, array_map('ord', str_split(substr(uniqid(), 7, 13), 1))), 0, $length);
     }
 
     /**
-     * @param $value
-     * @param string $iconv
-     * @return string
+     * 生成随机code
+     *
+     * @param $merchant_id
+     * @return false|string
      */
-    public static function iconvForWindows($value, $iconv = "gb2312")
+    public static function code($merchant_id)
     {
-        if (self::isWindowsOS())
-        {
-            switch ($iconv)
-            {
-                case "gb2312" : // utf-8转gb2312
-                    return iconv("utf-8", "gb2312", $value);
-                    break;
-                case "utf-8" : // gb2312转utf-8
-                    return iconv("gb2312", "utf-8", $value);
-                    break;
-            }
-        }
+        $time_str = date('YmdHis');
+        $rand_code = rand(0, 999999);
 
-        return $value;
+        return substr(md5($time_str . $rand_code . $merchant_id), 16, 32);
+    }
+
+    /**
+     * 字符串匹配替换
+     *
+     * @param $search
+     * @param $replace
+     * @param $subject
+     * @param null $count
+     * @return mixed
+     */
+    public static function replace($search, $replace, $subject, &$count = null)
+    {
+        return str_replace($search, $replace, $subject, $count);
     }
 
     /**
@@ -333,8 +356,83 @@ class StringHelper extends BaseStringHelper
      *
      * @return bool
      */
-    protected static function isWindowsOS()
+    public static function isWindowsOS()
     {
         return strncmp(PHP_OS, 'WIN', 3) === 0;
+    }
+
+    /**
+     * 将一个字符串部分字符用*替代隐藏
+     *
+     * @param string $string 待转换的字符串
+     * @param int $bengin 起始位置，从0开始计数，当$type=4时，表示左侧保留长度
+     * @param int $len 需要转换成*的字符个数，当$type=4时，表示右侧保留长度
+     * @param int $type 转换类型：0，从左向右隐藏；1，从右向左隐藏；2，从指定字符位置分割前由右向左隐藏；3，从指定字符位置分割后由左向右隐藏；4，保留首末指定字符串
+     * @param string $glue 分割符
+     * @return bool|string
+     */
+    public static function hideStr($string, $bengin = 0, $len = 4, $type = 0, $glue = "@")
+    {
+        if (empty($string)) {
+            return false;
+        }
+
+        $array = [];
+        if ($type == 0 || $type == 1 || $type == 4) {
+            $strlen = $length = mb_strlen($string);
+
+            while ($strlen) {
+                $array[] = mb_substr($string, 0, 1, "utf8");
+                $string = mb_substr($string, 1, $strlen, "utf8");
+                $strlen = mb_strlen($string);
+            }
+        }
+
+        switch ($type) {
+            case 0 :
+                for ($i = $bengin; $i < ($bengin + $len); $i++) {
+                    isset($array[$i]) && $array[$i] = "*";
+                }
+
+                $string = implode("", $array);
+                break;
+            case 1 :
+                $array = array_reverse($array);
+                for ($i = $bengin; $i < ($bengin + $len); $i++) {
+                    isset($array[$i]) && $array[$i] = "*";
+                }
+
+                $string = implode("", array_reverse($array));
+                break;
+            case 2 :
+                $array = explode($glue, $string);
+                $array[0] = self::hideStr($array[0], $bengin, $len, 1);
+                $string = implode($glue, $array);
+                break;
+            case 3 :
+                $array = explode($glue, $string);
+                $array[1] = self::hideStr($array[1], $bengin, $len, 0);
+                $string = implode($glue, $array);
+                break;
+            case 4 :
+                $left = $bengin;
+                $right = $len;
+                $tem = array();
+                for ($i = 0; $i < ($length - $right); $i++) {
+                    if (isset($array[$i])) {
+                        $tem[] = $i >= $left ? "*" : $array[$i];
+                    }
+                }
+
+                $array = array_chunk(array_reverse($array), $right);
+                $array = array_reverse($array[0]);
+                for ($i = 0; $i < $right; $i++) {
+                    $tem[] = $array[$i];
+                }
+                $string = implode("", $tem);
+                break;
+        }
+
+        return $string;
     }
 }

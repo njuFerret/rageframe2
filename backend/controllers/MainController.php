@@ -1,125 +1,88 @@
 <?php
+
 namespace backend\controllers;
 
 use Yii;
-use yii\caching\FileCache;
-use common\models\sys\Style;
-use common\models\sys\MenuCate;
+use backend\forms\ClearCache;
+use common\helpers\ResultHelper;
 
 /**
  * 主控制器
  *
  * Class MainController
  * @package backend\controllers
+ * @author jianyan74 <751393839@qq.com>
  */
-class MainController extends MController
+class MainController extends BaseController
 {
     /**
      * 系统首页
      *
-     * @return mixed
+     * @return string
      */
     public function actionIndex()
     {
-        return $this->renderPartial('index',[
-            'style' => Style::findByManagerId(Yii::$app->user->id),
-            'menuCates' => MenuCate::getList()
+        return $this->renderPartial($this->action->id, [
         ]);
     }
 
     /**
-     * 系统主页
+     * 子框架默认主页
      *
      * @return string
      */
     public function actionSystem()
     {
-        return $this->render('system',[
+        $merchant_id = Yii::$app->services->merchant->getId();
 
+        return $this->render($this->action->id, [
+            'memberCount' => Yii::$app->services->member->getCount($merchant_id),
+            'memberAccount' => Yii::$app->services->memberAccount->getSum($merchant_id),
         ]);
     }
 
     /**
+     * 用户指定时间内数量
+     *
+     * @param $type
+     * @return array
+     */
+    public function actionMemberBetweenCount($type)
+    {
+        $data = Yii::$app->services->member->getBetweenCountStat($type);
+
+        return ResultHelper::json(200, '获取成功', $data);
+    }
+
+    /**
+     * 用户指定时间内消费日志
+     *
+     * @param $type
+     * @return array
+     */
+    public function actionMemberCreditsLogBetweenCount($type)
+    {
+        $data = Yii::$app->services->memberCreditsLog->getBetweenCountStat($type);
+
+        return ResultHelper::json(200, '获取成功', $data);
+    }
+
+    /**
      * 清理缓存
+     *
+     * @return string
      */
     public function actionClearCache()
     {
-        $status = false;
-        // 删除后台文件缓存
-        Yii::$app->cache->flush();
-
-        $frontend_cache_path = Yii::getAlias('@frontend') . '/runtime/cache';
-        $wechat_cache_path = Yii::getAlias('@wechat') . '/runtime/cache';
-        $api_cache_path = Yii::getAlias('@api') . '/runtime/cache';
-        $console_cache_path = Yii::getAlias('@console') . '/runtime/cache';
-
-        // 清理前台文件缓存
-        if (is_dir($frontend_cache_path))
-        {
-            if (is_writable($frontend_cache_path))
-            {
-                $cache = new FileCache();
-                $cache->cachePath = $frontend_cache_path;
-                $cache->gc(true, false);
-            }
-            else
-            {
-                $status = $frontend_cache_path;
-            }
+        $model = new ClearCache();
+        if ($model->load(Yii::$app->request->post())) {
+            return $model->save()
+                ? $this->message('清理成功', $this->refresh())
+                : $this->message($this->getError($model), $this->refresh(), 'error');
         }
 
-        // 清理微信文件缓存
-        if (is_dir($wechat_cache_path))
-        {
-            if (is_writable($wechat_cache_path))
-            {
-                $cache = new FileCache();
-                $cache->cachePath = $wechat_cache_path;
-                $cache->gc(true, false);
-            }
-            else
-            {
-                $status = $wechat_cache_path;
-            }
-        }
-
-        // 清理api文件缓存
-        if (is_dir($api_cache_path))
-        {
-            if (is_writable($api_cache_path))
-            {
-                $cache = new FileCache();
-                $cache->cachePath = $api_cache_path;
-                $cache->gc(true, false);
-            }
-            else
-            {
-                $status = $api_cache_path;
-            }
-        }
-
-        // 清理控制台文件缓存
-        if (is_dir($console_cache_path))
-        {
-            if (is_writable($console_cache_path))
-            {
-                $cache = new FileCache();
-                $cache->cachePath = $console_cache_path;
-                $cache->gc(true, false);
-            }
-            else
-            {
-                $status = $console_cache_path;
-            }
-        }
-
-        // 删除备份缓存
-        $path = Yii::$app->params['dataBackupPath'];
-        $lock = realpath($path) . DIRECTORY_SEPARATOR . Yii::$app->params['dataBackLock'];
-        array_map("unlink", glob($lock));
-
-        return $this->render('clear-cache', [
-            'status' => $status
+        return $this->render($this->action->id, [
+            'model' => $model
         ]);
     }
 }
